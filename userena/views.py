@@ -14,7 +14,7 @@ from django.utils.translation import ugettext as _
 from django.http import HttpResponseForbidden, Http404
 
 from userena.forms import (SignupForm, SignupFormOnlyEmail, AuthenticationForm,
-                           ChangeEmailForm, EditProfileForm)
+                           ChangeEmailForm)
 from userena.models import UserenaSignup
 from userena.decorators import secure_required
 from userena.backends import UserenaAuthenticationBackend
@@ -508,121 +508,7 @@ def password_change(request, username, template_name='userena/password_form.html
     extra_context['profile'] = user.get_profile()
     return ExtraContextTemplateView.as_view(template_name=template_name,
                                             extra_context=extra_context)(request)
-@secure_required
-@permission_required_or_403('change_profile', (get_profile_model(), 'user__username', 'username'))
-def profile_edit(request, username, edit_profile_form=EditProfileForm,
-                 template_name='userena/profile_form.html', success_url=None,
-                 extra_context=None, **kwargs):
-    """
-    Edit profile.
 
-    Edits a profile selected by the supplied username. First checks
-    permissions if the user is allowed to edit this profile, if denied will
-    show a 404. When the profile is successfully edited will redirect to
-    ``success_url``.
-
-    :param username:
-        Username of the user which profile should be edited.
-
-    :param edit_profile_form:
-
-        Form that is used to edit the profile. The :func:`EditProfileForm.save`
-        method of this form will be called when the form
-        :func:`EditProfileForm.is_valid`.  Defaults to :class:`EditProfileForm`
-        from userena.
-
-    :param template_name:
-        String of the template that is used to render this view. Defaults to
-        ``userena/edit_profile_form.html``.
-
-    :param success_url:
-        Named URL which will be passed on to a django ``reverse`` function after
-        the form is successfully saved. Defaults to the ``userena_detail`` url.
-
-    :param extra_context:
-        Dictionary containing variables that are passed on to the
-        ``template_name`` template.  ``form`` key will always be the form used
-        to edit the profile, and the ``profile`` key is always the edited
-        profile.
-
-    **Context**
-
-    ``form``
-        Form that is used to alter the profile.
-
-    ``profile``
-        Instance of the ``Profile`` that is edited.
-
-    """
-    user = get_object_or_404(User,
-                             username__iexact=username)
-
-    profile = user.get_profile()
-
-    user_initial = {'first_name': user.first_name,
-                    'last_name': user.last_name}
-
-    form = edit_profile_form(instance=profile, initial=user_initial)
-
-    if request.method == 'POST':
-        form = edit_profile_form(request.POST, request.FILES, instance=profile,
-                                 initial=user_initial)
-
-        if form.is_valid():
-            profile = form.save()
-
-            if userena_settings.USERENA_USE_MESSAGES:
-                messages.success(request, _('Your profile has been updated.'),
-                                 fail_silently=True)
-
-            if success_url: redirect_to = success_url
-            else: redirect_to = reverse('userena_profile_detail', kwargs={'username': username})
-            return redirect(redirect_to)
-
-    if not extra_context: extra_context = dict()
-    extra_context['form'] = form
-    extra_context['profile'] = profile
-    return ExtraContextTemplateView.as_view(template_name=template_name,
-                                            extra_context=extra_context)(request)
-def profile_detail(request, username,
-    template_name=userena_settings.USERENA_PROFILE_DETAIL_TEMPLATE,
-    extra_context=None, **kwargs):
-    """
-    Detailed view of an user.
-
-    :param username:
-        String of the username of which the profile should be viewed.
-
-    :param template_name:
-        String representing the template name that should be used to display
-        the profile.
-
-    :param extra_context:
-        Dictionary of variables which should be supplied to the template. The
-        ``profile`` key is always the current profile.
-
-    **Context**
-
-    ``profile``
-        Instance of the currently viewed ``Profile``.
-
-    """
-    user = get_object_or_404(User,
-                             username__iexact=username)
-
-    profile_model = get_profile_model()
-    try:
-        profile = user.get_profile()
-    except profile_model.DoesNotExist:
-        profile = profile_model.create(user=user)
-
-    if not profile.can_view_profile(request.user):
-        return HttpResponseForbidden(_("You don't have permission to view this profile."))
-    if not extra_context: extra_context = dict()
-    extra_context['profile'] = user.get_profile()
-    extra_context['hide_email'] = userena_settings.USERENA_HIDE_EMAIL
-    return ExtraContextTemplateView.as_view(template_name=template_name,
-                                            extra_context=extra_context)(request)
 
 def profile_list(request, page=1, template_name='userena/profile_list.html',
                  paginate_by=50, extra_context=None, **kwargs): # pragma: no cover

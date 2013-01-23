@@ -1,9 +1,10 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from userena.compat import User
 from django.utils.translation import ugettext as _
+
 from guardian.admin import GuardedModelAdmin
 
+from userena.compat import User
 from userena.models import UserenaSignup
 from userena.utils import get_profile_model
 
@@ -17,6 +18,4 @@ class UserenaAdmin(UserAdmin, GuardedModelAdmin):
                     'is_staff', 'is_active', 'date_joined')
     list_filter = ('is_staff', 'is_superuser', 'is_active')
 
-admin.site.unregister(User)
 admin.site.register(User, UserenaAdmin)
-admin.site.register(get_profile_model())
