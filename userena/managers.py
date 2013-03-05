@@ -55,7 +55,6 @@ class UserenaManager(UserManager):
         :return: :class:`User` instance representing the new user.
 
         """
-        now = get_datetime_now()
 
         new_user = User.objects.create_user(username, email, password)
         new_user.is_active = active
@@ -63,17 +62,6 @@ class UserenaManager(UserManager):
 
         userena_profile = self.create_userena_profile(new_user)
 
-        # All users have an empty profile
-        profile_model = get_profile_model()
-        try:
-            new_profile = new_user.get_profile()
-        except profile_model.DoesNotExist:
-            new_profile = profile_model(user=new_user)
-            new_profile.save(using=self._db)
-
-        # Give permissions to view and change profile
-        for perm in ASSIGNED_PERMISSIONS['profile']:
-            assign(perm[0], new_user, new_profile)
 
         # Give permissions to view and change itself
         for perm in ASSIGNED_PERMISSIONS['user']:
@@ -202,9 +190,7 @@ class UserenaManager(UserManager):
 
         # Check that all the permissions are available.
         for model, perms in ASSIGNED_PERMISSIONS.items():
-            if model == 'profile':
-                model_obj = get_profile_model()
-            else: model_obj = User
+            model_obj = User
             model_content_type = ContentType.objects.get_for_model(model_obj)
             for perm in perms:
                 try:
@@ -216,52 +202,5 @@ class UserenaManager(UserManager):
                                               codename=perm[0],
                                               content_type=model_content_type)
 
-        # it is safe to rely on settings.ANONYMOUS_USER_ID since it is a requirement of
-        # django-guardian
-        for user in User.objects.exclude(id=settings.ANONYMOUS_USER_ID):
-            try:
-                user_profile = user.get_profile()
-            except get_profile_model().DoesNotExist:
-                warnings.append(_("No profile found for %(username)s") \
-                                    % {'username': user.username})
-            else:
-                all_permissions = get_perms(user, user_profile) + get_perms(user, user)
-
-                for model, perms in ASSIGNED_PERMISSIONS.items():
-                    if model == 'profile':
-                        perm_object = user.get_profile()
-                    else: perm_object = user
-
-                    for perm in perms:
-                        if perm[0] not in all_permissions:
-                            assign(perm[0], user, perm_object)
-                            changed_users.append(user)
 
         return (changed_permissions, changed_users, warnings)
-
-class UserenaBaseProfileManager(models.Manager):
-    """ Manager for :class:`UserenaProfile` """
-    def get_visible_profiles(self, user=None):
-        """
-        Returns all the visible profiles available to this user.
-
-        For now keeps it simple by just applying the cases when a user is not
-        active, a user has it's profile closed to everyone or a user only
-        allows registered users to view their profile.
-
-        :param user:
-            A Django :class:`User` instance.
-
-        :return:
-            All profiles that are visible to this user.
-
-        """
-        profiles = self.all()
-
-        filter_kwargs = {'user__is_active': True}
-
-        profiles = profiles.filter(**filter_kwargs)
-        if user and isinstance(user, AnonymousUser):
-            profiles = profiles.exclude(Q(privacy='closed') | Q(privacy='registered'))
-        else: profiles = profiles.exclude(Q(privacy='closed'))
-        return profiles
