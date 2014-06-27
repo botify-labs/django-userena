@@ -1,6 +1,7 @@
 from django.db import models
 from django.db.models import Q
-from userena.compat import User
+from django.contrib.auth import get_user_model
+User = get_user_model()
 from django.contrib.auth.models import UserManager, Permission, AnonymousUser
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import ugettext as _
