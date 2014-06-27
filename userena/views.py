@@ -2,7 +2,8 @@ from django.core.urlresolvers import reverse
 from django.shortcuts import redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout, REDIRECT_FIELD_NAME
 from django.contrib.auth.forms import PasswordChangeForm
-from userena.compat import User
+from django.contrib.auth import get_user_model
+User = get_user_model()
 from django.contrib.auth.views import logout as Signout
 from django.views.generic import TemplateView
 from django.contrib import messages
