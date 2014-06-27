@@ -1,7 +1,9 @@
 from django import forms
 from django.utils.translation import ugettext_lazy as _
 from django.contrib.auth import authenticate
-from userena.compat import User
+
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 try:
     from hashlib import sha1 as sha_constructor
@@ -10,7 +12,6 @@ except ImportError:
 
 from userena import settings as userena_settings
 from userena.models import UserenaSignup
-from userena.utils import get_profile_model
 
 import random
 
