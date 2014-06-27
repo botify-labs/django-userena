@@ -4,7 +4,8 @@ from django.utils.translation import ugettext as _
 
 from guardian.admin import GuardedModelAdmin
 
-from userena.compat import User
+from django.contrib.auth import get_user_model
+User = get_user_model()
 from userena.models import UserenaSignup
 from userena.utils import get_profile_model
 
