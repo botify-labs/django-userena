@@ -7,12 +7,12 @@ import re
 register = template.Library()
 
 class MessageCount(template.Node):
-    def __init__(self, from_user, var_name, to_user=None):
-        self.user = template.Variable(from_user)
+    def __init__(self, um_from_user, var_name, um_to_user=None):
+        self.user = template.Variable(um_from_user)
         self.var_name = var_name
-        if to_user:
-            self.to_user = template.Variable(to_user)
-        else: self.to_user = to_user
+        if um_to_user:
+            self.um_to_user = template.Variable(um_to_user)
+        else: self.um_to_user = um_to_user
 
     def render(self, context):
         try:
@@ -20,17 +20,17 @@ class MessageCount(template.Node):
         except template.VariableDoesNotExist:
             return ''
 
-        if not self.to_user:
+        if not self.um_to_user:
             message_count = MessageRecipient.objects.count_unread_messages_for(user)
 
         else:
             try:
-                to_user = self.to_user.resolve(context)
+                um_to_user = self.um_to_user.resolve(context)
             except template.VariableDoesNotExist:
                 return ''
 
             message_count = MessageRecipient.objects.count_unread_messages_between(user,
-                                                                                   to_user)
+                                                                                   um_to_user)
 
         context[self.var_name] = message_count
 
@@ -53,10 +53,10 @@ def get_unread_message_count_for(parser, token):
     try:
         tag_name, arg = token.contents.split(None, 1)
     except ValueError:
-        raise template.TemplateSyntaxError, "%s tag requires arguments" % token.contents.split()[0]
+        raise template.TemplateSyntaxError("%s tag requires arguments" % token.contents.split()[0])
     m = re.search(r'(.*?) as (\w+)', arg)
     if not m:
-        raise template.TemplateSyntaxError, "%s tag had invalid arguments" % tag_name
+        raise template.TemplateSyntaxError("%s tag had invalid arguments" % tag_name)
     user, var_name = m.groups()
     return MessageCount(user, var_name)
 
@@ -77,9 +77,9 @@ def get_unread_message_count_between(parser, token):
     try:
         tag_name, arg = token.contents.split(None, 1)
     except ValueError:
-        raise template.TemplateSyntaxError, "%s tag requires arguments" % token.contents.split()[0]
+        raise template.TemplateSyntaxError("%s tag requires arguments" % token.contents.split()[0])
     m = re.search(r'(.*?) and (.*?) as (\w+)', arg)
     if not m:
-        raise template.TemplateSyntaxError, "%s tag had invalid arguments" % tag_name
-    from_user, to_user, var_name = m.groups()
-    return MessageCount(from_user, var_name, to_user)
+        raise template.TemplateSyntaxError("%s tag had invalid arguments" % tag_name)
+    um_from_user, um_to_user, var_name = m.groups()
+    return MessageCount(um_from_user, var_name, um_to_user)

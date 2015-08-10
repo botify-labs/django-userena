@@ -12,9 +12,3 @@ UserenaManager
 
 .. autoclass:: userena.managers.UserenaManager
    :members:
-
-UserenaBaseProfileManager
--------------------------
-
-.. autoclass:: userena.managers.UserenaBaseProfileManager
-   :members:

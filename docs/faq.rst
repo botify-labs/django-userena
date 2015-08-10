@@ -11,6 +11,13 @@ and thus the ``change_profile`` permission goes missing. To fix this, run the
 ``check_permissions`` in :ref:`commands`. This checks all permissions and adds
 those that are missing.
 
+I get a "``Site matching query does not exist.``" exception
+-----------------------------------------------------------
+
+This means that your settings.SITE_ID value is incorrect. See the instructions
+on SITE_ID in the [Installation section](http://docs.django-userena.org/en/latest/installation.html).
+
+
 <ProfileModel> is already registered exception
 ----------------------------------------------
 
@@ -22,9 +29,56 @@ follows:
 
     # Unregister userena's
     admin.site.unregister(YOUR_PROFILE_MODEL)
-    
+                
     # Register your own admin class and attach it to the model
     admin.site.register(YOUR_PROFILE_MODEL, YOUR_PROFILE_ADMIN)
+
+Can I still add users manually?
+-------------------------------           
+Yes, but Userena requires there to be a `UserenaSignup` object for every
+registered user. If it's not there, you could receive the following error:
+
+.. code-block:: python
+
+                Exception Type: DoesNotExist at /accounts/mynewuser/email/
+
+So, whenever you are manually creating a user (outside of Userena), don't
+forget to also create a `UserenaSignup` object.
+
+How can I have multiple profiles per user?
+------------------------------------------
+
+One way to do this is by overriding the `save` method on `SignupForm` with
+your own form, extending userena's form and supply this form with to the
+signup view. For example:
+
+.. code-block:: python
+
+    def save(self):
+        """ My extra profile """
+        # Let userena do it's thing
+        user = super(SignupForm, self).save()
+
+        # You do all the logic needed for your own extra profile
+        custom_profile = ExtraProfile()
+        custom_profile.extra_field = self.cleaned_data['field']
+        custom_profile.save()
+
+        # Always return the new user
+        return user
+
+Important to note here is that you should always return the newly created
+`User` object. This is something that userena expects. Userena will take care
+of creating the user and the "standard" profile.
+
+Don't forget to supply your own form to the signup view by overriding the URL
+in your `urls.py`:
+
+.. code-block:: python
+
+     (r'^accounts/signup/$',
+      'userena.views.signup',
+      {'signup_form': SignupExtraProfileForm}),
 
 How do I add extra fields to forms?
 -----------------------------------
@@ -35,13 +89,13 @@ form. First you override the signup form and add the fields.
 
 .. code-block:: python
 
-    django import forms
+    from django import forms
     from django.utils.translation import ugettext_lazy as _
 
     from userena.forms import SignupForm
 
     class SignupFormExtra(SignupForm):
-        """ 
+        """
         A form to demonstrate how to add extra fields to the signup form, in this
         case adding the first and last name.
 
@@ -70,7 +124,7 @@ form. First you override the signup form and add the fields.
             self.fields.keyOrder = new_order
 
         def save(self):
-            """ 
+            """
             Override the save method to save the first and last name to the user
             field.
 
@@ -78,9 +132,14 @@ form. First you override the signup form and add the fields.
             # First save the parent form and get the user.
             new_user = super(SignupFormExtra, self).save()
 
-            new_user.first_name = self.cleaned_data['first_name']
-            new_user.last_name = self.cleaned_data['last_name']
-            new_user.save()
+            # Get the profile, the `save` method above creates a profile for each
+            # user because it calls the manager method `create_user`.
+            # See: https://github.com/bread-and-pepper/django-userena/blob/master/userena/managers.py#L65
+            user_profile = new_user.get_profile()
+
+            user_profile.first_name = self.cleaned_data['first_name']
+            user_profile.last_name = self.cleaned_data['last_name']
+            user_profile.save()
 
             # Userena expects to get the new user from this form, so return the new
             # user.

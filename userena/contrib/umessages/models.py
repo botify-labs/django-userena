@@ -1,11 +1,14 @@
 from django.db import models
+from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
-from userena.compat import User
-from django.utils.text import truncate_words
 
+from userena.utils import truncate_words
 from userena.contrib.umessages.managers import (MessageManager, MessageContactManager,
                                                 MessageRecipientManager)
+from userena.utils import user_model_label
 
+
+@python_2_unicode_compatible
 class MessageContact(models.Model):
     """
     Contact model.
@@ -14,11 +17,11 @@ class MessageContact(models.Model):
     received a message from.
 
     """
-    from_user = models.ForeignKey(User, verbose_name=_("from user"),
-                                  related_name=('from_users'))
+    um_from_user = models.ForeignKey(user_model_label, verbose_name=_("from user"),
+                                  related_name=('um_from_users'))
 
-    to_user = models.ForeignKey(User, verbose_name=_("to user"),
-                                related_name=('to_users'))
+    um_to_user = models.ForeignKey(user_model_label, verbose_name=_("to user"),
+                                related_name=('um_to_users'))
 
     latest_message = models.ForeignKey('Message',
                                        verbose_name=_("latest message"))
@@ -26,15 +29,15 @@ class MessageContact(models.Model):
     objects = MessageContactManager()
 
     class Meta:
-        unique_together = ('from_user', 'to_user')
+        unique_together = ('um_from_user', 'um_to_user')
         ordering = ['latest_message']
         verbose_name = _("contact")
         verbose_name_plural = _("contacts")
 
-    def __unicode__(self):
-        return (_("%(from_user)s and %(to_user)s")
-                % {'from_user': self.from_user.username,
-                   'to_user': self.to_user.username})
+    def __str__(self):
+        return (_("%(um_from_user)s and %(um_to_user)s")
+                % {'um_from_user': self.um_from_user.username,
+                   'um_to_user': self.um_to_user.username})
 
     def opposite_user(self, user):
         """
@@ -47,17 +50,19 @@ class MessageContact(models.Model):
             A Django :class:`User`.
 
         """
-        if self.from_user == user:
-            return self.to_user
-        else: return self.from_user
+        if self.um_from_user == user:
+            return self.um_to_user
+        else: return self.um_from_user
 
+
+@python_2_unicode_compatible
 class MessageRecipient(models.Model):
     """
     Intermediate model to allow per recipient marking as
     deleted, read etc. of a message.
 
     """
-    user = models.ForeignKey(User,
+    user = models.ForeignKey(user_model_label,
                              verbose_name=_("recipient"))
 
     message = models.ForeignKey('Message',
@@ -77,7 +82,7 @@ class MessageRecipient(models.Model):
         verbose_name = _("recipient")
         verbose_name_plural = _("recipients")
 
-    def __unicode__(self):
+    def __str__(self):
         return (_("%(message)s")
                 % {'message': self.message})
 
@@ -85,15 +90,17 @@ class MessageRecipient(models.Model):
         """ Returns a boolean whether the recipient has read the message """
         return self.read_at is None
 
+
+@python_2_unicode_compatible
 class Message(models.Model):
     """ Private message model, from user to user(s) """
     body = models.TextField(_("body"))
 
-    sender = models.ForeignKey(User,
+    sender = models.ForeignKey(user_model_label,
                                related_name='sent_messages',
                                verbose_name=_("sender"))
 
-    recipients = models.ManyToManyField(User,
+    recipients = models.ManyToManyField(user_model_label,
                                         through='MessageRecipient',
                                         related_name="received_messages",
                                         verbose_name=_("recipients"))
@@ -112,16 +119,16 @@ class Message(models.Model):
         verbose_name = _("message")
         verbose_name_plural = _("messages")
 
-    def __unicode__(self):
+    def __str__(self):
         """ Human representation, displaying first ten words of the body. """
         truncated_body = truncate_words(self.body, 10)
         return "%(truncated_body)s" % {'truncated_body': truncated_body}
 
-    def save_recipients(self, to_user_list):
+    def save_recipients(self, um_to_user_list):
         """
         Save the recipients for this message
 
-        :param to_user_list:
+        :param um_to_user_list:
             A list which elements are :class:`User` to whom the message is for.
 
         :return:
@@ -129,17 +136,17 @@ class Message(models.Model):
 
         """
         created = False
-        for user in to_user_list:
+        for user in um_to_user_list:
             MessageRecipient.objects.create(user=user,
                                             message=self)
             created = True
         return created
 
-    def update_contacts(self, to_user_list):
+    def update_contacts(self, um_to_user_list):
         """
         Updates the contacts that are used for this message.
 
-        :param to_user_list:
+        :param um_to_user_list:
             List of Django :class:`User`.
 
         :return:
@@ -147,7 +154,7 @@ class Message(models.Model):
 
         """
         updated = False
-        for user in to_user_list:
+        for user in um_to_user_list:
             MessageContact.objects.update_contact(self.sender,
                                                   user,
                                                   self)

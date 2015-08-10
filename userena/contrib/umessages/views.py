@@ -2,7 +2,6 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 from django.core.urlresolvers import reverse
 from django.shortcuts import get_object_or_404, redirect, render
-from userena.compat import User
 from django.contrib import messages
 from django.utils.translation import ugettext as _
 from django.utils.translation import ungettext
@@ -11,7 +10,7 @@ from django.views.generic.list import ListView
 
 from userena.contrib.umessages.models import Message, MessageRecipient, MessageContact
 from userena.contrib.umessages.forms import ComposeForm
-from userena.utils import get_datetime_now
+from userena.utils import get_datetime_now, get_user_model
 from userena import settings as userena_settings
 
 
@@ -26,32 +25,34 @@ class MessageListView(ListView):
     page=1
     paginate_by=50
     template_name='umessages/message_list.html'
-    extra_context=None
-    context_object_name = 'message'
+    extra_context={}
+    context_object_name = 'message_list'
+
+    def get_context_data(self, **kwargs):
+        context = super(MessageListView, self).get_context_data(**kwargs)
+        context.update(self.extra_context)
+        return context
 
     def get_queryset(self):
         return MessageContact.objects.get_contacts_for(self.request.user)
 
 
-class MessageDetailListView(ListView):
+class MessageDetailListView(MessageListView):
     """
 
     Returns a conversation between two users
 
     """
-    page=1
-    paginate_by=50
     template_name='umessages/message_detail.html'
-    extra_context=None
-    context_object_name = 'message'
 
     def get_context_data(self, **kwargs):
         context = super(MessageDetailListView, self).get_context_data(**kwargs)
         context['recipient'] = self.recipient
+        return context
 
     def get_queryset(self):
         username = self.kwargs['username']
-        self.recipient = get_object_or_404(User,
+        self.recipient = get_object_or_404(get_user_model(),
                                   username__iexact=username)
         queryset = Message.objects.get_conversation_between(self.request.user,
                                                         self.recipient)
@@ -107,7 +108,7 @@ def message_compose(request, recipients=None, compose_form=ComposeForm,
 
     if recipients:
         username_list = [r.strip() for r in recipients.split("+")]
-        recipients = [u for u in User.objects.filter(username__in=username_list)]
+        recipients = [u for u in get_user_model().objects.filter(username__in=username_list)]
         initial_data["to"] = recipients
 
     form = compose_form(initial=initial_data)
