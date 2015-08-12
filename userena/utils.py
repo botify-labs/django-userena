@@ -1,16 +1,24 @@
 from django.conf import settings
-from django.contrib.auth.models import SiteProfileNotAvailable
-from django.db.models import get_model
 
-try:
-    from hashlib import sha1 as sha_constructor, md5 as md5_constructor
-except ImportError:
-    from django.utils.hashcompat import sha_constructor, md5_constructor
+from django.utils.six import text_type
+from django.utils.six.moves.urllib.parse import urlencode
 
 from userena import settings as userena_settings
+from userena.compat import SiteProfileNotAvailable, get_model
+from userena.compat import sha_constructor, md5_constructor
 
 import urllib, random, datetime
 
+try:
+    from django.utils.text import truncate_words
+except ImportError:
+    # Django >=1.5
+    from django.utils.text import Truncator
+    from django.utils.functional import allow_lazy
+    def truncate_words(s, num, end_text='...'):
+        truncate = end_text and ' %s' % end_text or ''
+        return Truncator(s).words(num, truncate=truncate)
+    truncate_words = allow_lazy(truncate_words, text_type)
 
 def get_gravatar(email, size=80, default='identicon'):
     """ Get's a Gravatar for a email address.
@@ -46,14 +54,16 @@ def get_gravatar(email, size=80, default='identicon'):
     """
     if userena_settings.USERENA_MUGSHOT_GRAVATAR_SECURE:
         base_url = 'https://secure.gravatar.com/avatar/'
-    else: base_url = 'http://www.gravatar.com/avatar/'
+    else: base_url = '//www.gravatar.com/avatar/'
 
     gravatar_url = '%(base_url)s%(gravatar_id)s?' % \
             {'base_url': base_url,
-             'gravatar_id': md5_constructor(email.lower()).hexdigest()}
+             'gravatar_id': md5_constructor(email.lower().encode('utf-8')).hexdigest()}
 
-    gravatar_url += urllib.urlencode({'s': str(size),
-                                      'd': default})
+    gravatar_url += urlencode({
+        's': str(size),
+        'd': default
+    })
     return gravatar_url
 
 def signin_redirect(redirect=None, user=None):
@@ -96,28 +106,16 @@ def generate_sha1(string, salt=None):
     :return: Tuple containing the salt and hash.
 
     """
+    if not isinstance(string, (str, text_type)):
+        string = str(string)
+
     if not salt:
-        salt = sha_constructor(str(random.random())).hexdigest()[:5]
-    hash = sha_constructor(salt+str(string)).hexdigest()
+        salt = sha_constructor(str(random.random()).encode('utf-8')).hexdigest()[:5]
 
-    return (salt, hash)
+    salted_bytes = (salt.encode('utf-8') + string.encode('utf-8'))
+    hash_ = sha_constructor(salted_bytes).hexdigest()
 
-def get_profile_model():
-    """
-    Return the model class for the currently-active user profile
-    model, as defined by the ``AUTH_PROFILE_MODULE`` setting.
-
-    :return: The model that is used as profile.
-
-    """
-    if (not hasattr(settings, 'AUTH_PROFILE_MODULE')) or \
-           (not settings.AUTH_PROFILE_MODULE):
-        raise SiteProfileNotAvailable
-
-    profile_mod = get_model(*settings.AUTH_PROFILE_MODULE.split('.'))
-    if profile_mod is None:
-        raise SiteProfileNotAvailable
-    return profile_mod
+    return salt, hash_
 
 def get_protocol():
     """
@@ -128,7 +126,7 @@ def get_protocol():
 
     """
     protocol = 'http'
-    if userena_settings.USERENA_USE_HTTPS:
+    if getattr(settings, 'USERENA_USE_HTTPS', userena_settings.DEFAULT_USERENA_USE_HTTPS):
         protocol = 'https'
     return protocol
 
@@ -147,3 +145,16 @@ def get_datetime_now():
         return timezone.now() # pragma: no cover
     except ImportError: # pragma: no cover
         return datetime.datetime.now()
+
+# Django 1.5 compatibility utilities, providing support for custom User models.
+# Since get_user_model() causes a circular import if called when app models are
+# being loaded, the user_model_label should be used when possible, with calls
+# to get_user_model deferred to execution time
+
+user_model_label = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
+
+try:
+    from django.contrib.auth import get_user_model
+except ImportError:
+    def get_user_model():
+        return get_model(*user_model_label.rsplit('.', 1))

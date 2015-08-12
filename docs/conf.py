@@ -17,8 +17,11 @@ import sys, os
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.append(os.path.abspath('..'))
-os.environ['DJANGO_SETTINGS_MODULE'] = 'demo.settings'
+sys.path.append(os.path.abspath('../demo'))
 userena = __import__('userena')
+demo = __import__('demo')
+os.environ['DJANGO_SETTINGS_MODULE'] = 'demo.settings'
+
 
 # -- General configuration -----------------------------------------------------
 
@@ -174,8 +177,8 @@ htmlhelp_basename = 'userenadoc'
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'Userena.tex', u'Userena Documentation',
-   u'Petar Radosevic', 'manual'),
+  ('index', 'Userena.tex', 'Userena Documentation',
+   'Petar Radosevic', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of

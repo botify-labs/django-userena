@@ -10,6 +10,21 @@ Userena.
 Userena settings
 ----------------
 
+USERENA_SIGNIN_AFTER_SIGNUP
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Default ``False`` (integer)
+
+Boolean that defines if a user should be logged in after a successful sign up.
+
+If True, USERENA_ACTIVATION_REQUIRED must be False for the sign-in to happen.
+
+Note that USERENA_SIGNIN_REDIRECT_URL will not be respected for the automatic sign-in.
+The user will be redirect to the value of 'success_url' in userena.views.signup.
+
+You can override 'success_url' in your urls.py. See the "How do I add extra fields to forms?"
+example in the FAQ, where the 'signup_form' variable is overridden.
+
+
 USERENA_SIGNIN_REDIRECT_URL
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Default ``/accounts/%(username)s/'`` (string)
@@ -168,12 +183,26 @@ Default: ``userena/profile_detail.html`` (string)
 Template to use for rendering user profiles. This allows you to specify a
 template in your own project which extends ``userena/profile_detail.html``.
 
+USERENA_PROFILE_LIST_TEMPLATE
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Default: ``userena/profile_list.html`` (string)
+
+Template to use for rendering users list. This allows you to specify a
+template in your own project which extends ``userena/profile_list.html``.
+
 USERENA_DISABLE_PROFILE_LIST
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Default: ``False`` (boolean)
 
 Boolean value that defines if the ``profile_list`` view is enabled within the
 project. If so, users can view a list of different profiles.
+
+USERENA_DISABLE_SIGNUP
+~~~~~~~~~~~~~~~~~~~~~~
+Default: ``False`` (boolean)
+
+Boolean value that defines if signups are disabled within the project. If so,
+users trying to sign up will be denied.
 
 USERENA_USE_MESSAGES
 ~~~~~~~~~~~~~~~~~~~~
@@ -201,8 +230,42 @@ USERENA_HIDE_EMAIL
 ~~~~~~~~~~~~~~~~~~
 Default: ``False`` (boolean)
 
-Prevents email addresses from being displayed to other users if set to `
-`True``.
+Prevents email addresses from being displayed to other users if set to ``True``.
+
+USERENA_HTML_EMAIL
+~~~~~~~~~~~~~~~~~~
+Default: ``False`` (boolean)
+
+If ``True`` multipart emails are generated using html templates.
+
+USERENA_USE_PLAIN_TEMPLATE
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+Default: ``True`` (boolean)
+
+Uses a text template for plain text part (when ``USERENA_HTML_EMAIL = True``).
+When ``USERENA_HTML_EMAIL = False``, plain text templates are always used for
+emails even if ``USERENA_USE_PLAIN_TEMPLATE = False``.
+
+USERENA_REGISTER_PROFILE
+~~~~~~~~~~~~~~~~~~~~~~~~
+Default: ``True`` (boolean)
+
+If ``True`` userena will register the profile model with Django Admin for you. 
+It uses a GuardedModelAdmin when registering. This allows per user object permissions
+to be set via the admin.
+If ``False`` you will have to regiter the profile with the Django Admin yourself.
+
+USERENA_REGISTER_USER
+~~~~~~~~~~~~~~~~~~~~~
+Default: ``True`` (boolean)
+
+If ``True`` userena will first unregister the user model with the admin and 
+then reregister the user model using a GuardedModelAdmin. This allows you to 
+set per user object permissons.
+If ``False`` and you want to you set per user object permissions on the user model 
+via the admin you will have to unregister and reregiter the user model with the
+Django Admin yourself.
+
 
 Django settings
 ---------------

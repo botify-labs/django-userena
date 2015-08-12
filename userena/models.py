@@ -1,18 +1,15 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-from django.conf import settings
-from django.contrib.auth import get_user_model
-User = get_user_model()
 from django.contrib.sites.models import Site
-from django.core.mail import send_mail
 from django.db import models
-from django.template.loader import render_to_string
+from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import ugettext_lazy as _
 from userena import settings as userena_settings
 from userena.managers import UserenaManager
 from userena.utils import generate_sha1, get_protocol, \
-    get_datetime_now
+    get_datetime_now, user_model_label
 import datetime
+from .mail import UserenaConfirmationMail
 
 
 def upload_to_mugshot(instance, filename):
@@ -23,25 +20,24 @@ def upload_to_mugshot(instance, filename):
 
     """
     extension = filename.split('.')[-1].lower()
-    salt, hash = generate_sha1(instance.id)
-    path = userena_settings.USERENA_MUGSHOT_PATH % {
-                                                     'username': instance.user.username,
-                                                     'id': instance.user.id,
-                                                     'date': instance.user.date_joined,
-                                                     'date_now': get_datetime_now().date(),
-                                                     }
+    salt, hash = generate_sha1(instance.pk)
+    path = userena_settings.USERENA_MUGSHOT_PATH % {'username': instance.user.username,
+                                                    'id': instance.user.id,
+                                                    'date': instance.user.date_joined,
+                                                    'date_now': get_datetime_now().date()}
     return '%(path)s%(hash)s.%(extension)s' % {'path': path,
                                                'hash': hash[:10],
                                                'extension': extension}
 
 
+@python_2_unicode_compatible
 class UserenaSignup(models.Model):
     """
     Userena model which stores all the necessary information to have a full
     functional user implementation on your Django website.
 
     """
-    user = models.OneToOneField(User,
+    user = models.OneToOneField(user_model_label,
                                 verbose_name=_('user'),
                                 related_name='userena_signup')
 
@@ -76,7 +72,7 @@ class UserenaSignup(models.Model):
         verbose_name = _('userena registration')
         verbose_name_plural = _('userena registrations')
 
-    def __unicode__(self):
+    def __str__(self):
         return '%s' % self.user.username
 
     def change_email(self, email):
@@ -122,31 +118,14 @@ class UserenaSignup(models.Model):
                   'confirmation_key': self.email_confirmation_key,
                   'site': Site.objects.get_current()}
 
-        # Email to the old address, if present
-        subject_old = render_to_string('userena/emails/confirmation_email_subject_old.txt',
-                                       context)
-        subject_old = ''.join(subject_old.splitlines())
+        mailer = UserenaConfirmationMail(context=context)
+        mailer.generate_mail("confirmation", "_old")
 
-        message_old = render_to_string('userena/emails/confirmation_email_message_old.txt',
-                                       context)
         if self.user.email:
-            send_mail(subject_old,
-                      message_old,
-                      settings.DEFAULT_FROM_EMAIL,
-                    [self.user.email])
+            mailer.send_mail(self.user.email)
 
-        # Email to the new address
-        subject_new = render_to_string('userena/emails/confirmation_email_subject_new.txt',
-                                       context)
-        subject_new = ''.join(subject_new.splitlines())
-
-        message_new = render_to_string('userena/emails/confirmation_email_message_new.txt',
-                                       context)
-
-        send_mail(subject_new,
-                  message_new,
-                  settings.DEFAULT_FROM_EMAIL,
-                  [self.email_unconfirmed, ])
+        mailer.generate_mail("confirmation", "_new")
+        mailer.send_mail(self.email_unconfirmed)
 
     def activation_key_expired(self):
         """
@@ -183,13 +162,6 @@ class UserenaSignup(models.Model):
                   'activation_key': self.activation_key,
                   'site': Site.objects.get_current()}
 
-        subject = render_to_string('userena/emails/activation_email_subject.txt',
-                                   context)
-        subject = ''.join(subject.splitlines())
-
-        message = render_to_string('userena/emails/activation_email_message.txt',
-                                   context)
-        send_mail(subject,
-                  message,
-                  settings.DEFAULT_FROM_EMAIL,
-                  [self.user.email, ])
+        mailer = UserenaConfirmationMail(context=context)
+        mailer.generate_mail("activation")
+        mailer.send_mail(self.user.email)

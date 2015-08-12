@@ -1,19 +1,20 @@
-from django.db import models
-from django.db.models import Q
-from django.contrib.auth import get_user_model
-User = get_user_model()
-from django.contrib.auth.models import UserManager, Permission, AnonymousUser
+from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.auth.models import UserManager, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import ugettext as _
 from django.conf import settings
+from django.utils.six import text_type
 
 from userena import settings as userena_settings
-from userena.utils import generate_sha1, get_profile_model, get_datetime_now
+from userena.utils import generate_sha1, get_datetime_now, get_user_model
 from userena import signals as userena_signals
+from userena.compat import smart_text
 
-from guardian.shortcuts import assign, get_perms
+from guardian.shortcuts import assign_perm, get_perms
 
-import re, datetime
+
+
+import re
 
 SHA1_RE = re.compile('^[a-f0-9]{40}$')
 
@@ -57,16 +58,16 @@ class UserenaManager(UserManager):
 
         """
 
-        new_user = User.objects.create_user(username, email, password)
+        new_user = get_user_model().objects.create_user(
+            username, email, password)
         new_user.is_active = active
         new_user.save()
 
-        userena_profile = self.create_userena_profile(new_user)
-
-
         # Give permissions to view and change itself
         for perm in ASSIGNED_PERMISSIONS['user']:
-            assign(perm[0], new_user, new_user)
+            assign_perm(perm[0], new_user, new_user)
+
+        userena_profile = self.create_userena_profile(new_user)
 
         if send_email:
             userena_profile.send_activation_email()
@@ -83,12 +84,40 @@ class UserenaManager(UserManager):
         :return: The newly created :class:`UserenaSignup` instance.
 
         """
-        if isinstance(user.username, unicode):
-            user.username = user.username.encode('utf-8')
+        if isinstance(user.username, text_type):
+            user.username = smart_text(user.username)
         salt, activation_key = generate_sha1(user.username)
 
-        return self.create(user=user,
+        try:
+            profile = self.get(user=user)
+        except self.model.DoesNotExist:
+            profile = self.create(user=user,
                            activation_key=activation_key)
+        return profile
+
+    def reissue_activation(self, activation_key):
+        """
+        Creates a new ``activation_key`` resetting activation timeframe when
+        users let the previous key expire.
+
+        :param activation_key:
+            String containing the secret SHA1 activation key.
+
+        """
+        try:
+            userena = self.get(activation_key=activation_key)
+        except self.model.DoesNotExist:
+            return False
+        try:
+            salt, new_activation_key = generate_sha1(userena.user.username)
+            userena.activation_key = new_activation_key
+            userena.save(using=self._db)
+            userena.user.date_joined = get_datetime_now()
+            userena.user.save(using=self._db)
+            userena.send_activation_email()
+            return True
+        except Exception:
+            return False
 
     def activate_user(self, activation_key):
         """
@@ -122,6 +151,25 @@ class UserenaManager(UserManager):
 
                 return user
         return False
+
+    def check_expired_activation(self, activation_key):
+        """
+        Check if ``activation_key`` is still valid.
+
+        Raises a ``self.model.DoesNotExist`` exception if key is not present or
+         ``activation_key`` is not a valid string
+
+        :param activation_key:
+            String containing the secret SHA1 for a valid activation.
+
+        :return:
+            True if the ket has expired, False if still valid.
+
+        """
+        if SHA1_RE.search(activation_key):
+            userena = self.get(activation_key=activation_key)
+            return userena.activation_key_expired()
+        raise self.model.DoesNotExist
 
     def confirm_email(self, confirmation_key):
         """
@@ -170,8 +218,8 @@ class UserenaManager(UserManager):
 
         """
         deleted_users = []
-        for user in User.objects.filter(is_staff=False,
-                                        is_active=False):
+        for user in get_user_model().objects.filter(is_staff=False,
+                                                    is_active=False):
             if user.userena_signup.activation_key_expired():
                 deleted_users.append(user)
                 user.delete()
@@ -191,8 +239,10 @@ class UserenaManager(UserManager):
 
         # Check that all the permissions are available.
         for model, perms in ASSIGNED_PERMISSIONS.items():
-            model_obj = User
+            model_obj = get_user_model()
+
             model_content_type = ContentType.objects.get_for_model(model_obj)
+
             for perm in perms:
                 try:
                     Permission.objects.get(codename=perm[0],
@@ -203,5 +253,17 @@ class UserenaManager(UserManager):
                                               codename=perm[0],
                                               content_type=model_content_type)
 
+        # it is safe to rely on settings.ANONYMOUS_USER_ID since it is a
+        # requirement of django-guardian
+        for user in get_user_model().objects.exclude(id=settings.ANONYMOUS_USER_ID):
+            all_permissions = get_perms(user, user)
+
+            for model, perms in ASSIGNED_PERMISSIONS.items():
+                perm_object = user
+
+                for perm in perms:
+                    if perm[0] not in all_permissions:
+                        assign_perm(perm[0], user, perm_object)
+                        changed_users.append(user)
 
         return (changed_permissions, changed_users, warnings)
